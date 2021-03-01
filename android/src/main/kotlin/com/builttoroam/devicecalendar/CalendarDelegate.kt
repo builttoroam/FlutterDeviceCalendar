@@ -31,6 +31,7 @@ import com.builttoroam.devicecalendar.common.Constants.Companion.CALENDAR_PROJEC
 import com.builttoroam.devicecalendar.common.Constants.Companion.CALENDAR_PROJECTION_ID_INDEX
 import com.builttoroam.devicecalendar.common.Constants.Companion.CALENDAR_PROJECTION_IS_PRIMARY_INDEX
 import com.builttoroam.devicecalendar.common.Constants.Companion.CALENDAR_PROJECTION_OLDER_API
+import com.builttoroam.devicecalendar.common.Constants.Companion.CALENDAR_PROJECTION_OWNER_ACCOUNT_INDEX
 import com.builttoroam.devicecalendar.common.Constants.Companion.EVENT_INSTANCE_DELETION
 import com.builttoroam.devicecalendar.common.Constants.Companion.EVENT_INSTANCE_DELETION_BEGIN_INDEX
 import com.builttoroam.devicecalendar.common.Constants.Companion.EVENT_INSTANCE_DELETION_END_INDEX
@@ -349,7 +350,7 @@ class CalendarDelegate : PluginRegistry.RequestPermissionsResultListener {
                     events.add(event)
                 }
                 for (event in events) {
-                    val attendees = retrieveAttendees(event.eventId!!, contentResolver)
+                    val attendees = retrieveAttendees(calendar, event.eventId!!, contentResolver)
                     event.organizer = attendees.firstOrNull { it.isOrganizer != null && it.isOrganizer }
                     event.attendees = attendees
                     event.reminders = retrieveReminders(event.eventId!!, contentResolver)
@@ -405,7 +406,7 @@ class CalendarDelegate : PluginRegistry.RequestPermissionsResultListener {
             } else {
                 job = GlobalScope.launch(Dispatchers.IO + exceptionHandler) {
                     contentResolver?.update(ContentUris.withAppendedId(Events.CONTENT_URI, eventId), values, null, null)
-                    val existingAttendees = retrieveAttendees(eventId.toString(), contentResolver)
+                    val existingAttendees = retrieveAttendees(calendar, eventId.toString(), contentResolver)
                     val attendeesToDelete = if (event.attendees.isNotEmpty()) existingAttendees.filter { existingAttendee -> event.attendees.all { it.emailAddress != existingAttendee.emailAddress } } else existingAttendees
                     for (attendeeToDelete in attendeesToDelete) {
                         deleteAttendee(eventId, attendeeToDelete, contentResolver)
@@ -415,6 +416,20 @@ class CalendarDelegate : PluginRegistry.RequestPermissionsResultListener {
                     insertAttendees(attendeesToInsert, eventId, contentResolver)
                     deleteExistingReminders(contentResolver, eventId)
                     insertReminders(event.reminders, eventId, contentResolver!!)
+
+                    val existingSelfAttendee = existingAttendees.firstOrNull {
+                        it.emailAddress == calendar.ownerAccount
+                    }
+                    val newSelfAttendee = event.attendees.firstOrNull {
+                        it.emailAddress == calendar.ownerAccount
+                    }
+                    if (existingSelfAttendee != null &&
+                            newSelfAttendee != null &&
+                            newSelfAttendee.attendanceStatus != null &&
+                            existingSelfAttendee.attendanceStatus != newSelfAttendee.attendanceStatus) {
+
+                        updateAttendeeStatus(eventId, newSelfAttendee, contentResolver)
+                    }
                 }
             }
             job.invokeOnCompletion {
@@ -559,6 +574,14 @@ class CalendarDelegate : PluginRegistry.RequestPermissionsResultListener {
 
     }
 
+    private fun updateAttendeeStatus(eventId: Long, attendee: Attendee, contentResolver: ContentResolver?) {
+        val selection = "(" + CalendarContract.Attendees.EVENT_ID + " = ?) AND (" + CalendarContract.Attendees.ATTENDEE_EMAIL + " = ?)"
+        val selectionArgs = arrayOf(eventId.toString() + "", attendee.emailAddress)
+        val values = ContentValues()
+        values.put(CalendarContract.Attendees.ATTENDEE_STATUS, attendee.attendanceStatus)
+        contentResolver?.update(CalendarContract.Attendees.CONTENT_URI, values, selection, selectionArgs)
+    }
+
     fun deleteEvent(calendarId: String, eventId: String, pendingChannelResult: MethodChannel.Result, startDate: Long? = null, endDate: Long? = null, followingInstances: Boolean? = null) {
         if (arePermissionsGranted()) {
             val existingCal = retrieveCalendar(calendarId, pendingChannelResult, true)
@@ -686,8 +709,17 @@ class CalendarDelegate : PluginRegistry.RequestPermissionsResultListener {
         val calendarColor = cursor.getInt(CALENDAR_PROJECTION_COLOR_INDEX)
         val accountName = cursor.getString(CALENDAR_PROJECTION_ACCOUNT_NAME_INDEX)
         val accountType = cursor.getString(CALENDAR_PROJECTION_ACCOUNT_TYPE_INDEX)
+        val ownerAccount = cursor.getString(CALENDAR_PROJECTION_OWNER_ACCOUNT_INDEX)
 
-        val calendar = Calendar(calId.toString(), displayName, calendarColor, accountName, accountType)
+        val calendar = Calendar(
+                calId.toString(),
+                displayName,
+                calendarColor,
+                accountName,
+                accountType,
+                ownerAccount
+        )
+
         calendar.isReadOnly = isCalendarReadOnly(accessLevel)
         if (atLeastAPI(17)) {
             val isPrimary = cursor.getString(CALENDAR_PROJECTION_IS_PRIMARY_INDEX)
@@ -798,17 +830,21 @@ class CalendarDelegate : PluginRegistry.RequestPermissionsResultListener {
         }?.firstOrNull()
     }
 
-    private fun parseAttendeeRow(cursor: Cursor?): Attendee? {
+    private fun parseAttendeeRow(calendar: Calendar, cursor: Cursor?): Attendee? {
         if (cursor == null) {
             return null
         }
 
+        val emailAddress = cursor.getString(ATTENDEE_EMAIL_INDEX)
+
         return Attendee(
-          cursor.getString(ATTENDEE_EMAIL_INDEX),
+          emailAddress,
           cursor.getString(ATTENDEE_NAME_INDEX),
           cursor.getInt(ATTENDEE_TYPE_INDEX),
           cursor.getInt(ATTENDEE_STATUS_INDEX),
-          cursor.getInt(ATTENDEE_RELATIONSHIP_INDEX) == CalendarContract.Attendees.RELATIONSHIP_ORGANIZER)
+          cursor.getInt(ATTENDEE_RELATIONSHIP_INDEX) == CalendarContract.Attendees.RELATIONSHIP_ORGANIZER,
+          emailAddress == calendar.ownerAccount
+        )
     }
 
     private fun parseReminderRow(cursor: Cursor?): Reminder? {
@@ -831,14 +867,14 @@ class CalendarDelegate : PluginRegistry.RequestPermissionsResultListener {
     }
 
     @SuppressLint("MissingPermission")
-    private fun retrieveAttendees(eventId: String, contentResolver: ContentResolver?): MutableList<Attendee> {
+    private fun retrieveAttendees(calendar: Calendar, eventId: String, contentResolver: ContentResolver?): MutableList<Attendee> {
         val attendees: MutableList<Attendee> = mutableListOf()
         val attendeesQuery = "(${CalendarContract.Attendees.EVENT_ID} = ${eventId})"
         val attendeesCursor = contentResolver?.query(CalendarContract.Attendees.CONTENT_URI, ATTENDEE_PROJECTION, attendeesQuery, null, null)
         attendeesCursor.use { cursor ->
             if (cursor?.moveToFirst() == true) {
                 do {
-                    val attendee = parseAttendeeRow(attendeesCursor) ?: continue
+                    val attendee = parseAttendeeRow(calendar, attendeesCursor) ?: continue
                     attendees.add(attendee)
                 } while (cursor.moveToNext())
             }

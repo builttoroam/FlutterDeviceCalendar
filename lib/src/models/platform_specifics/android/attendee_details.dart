@@ -5,15 +5,12 @@ import '../../../common/error_messages.dart';
 import 'attendance_status.dart';
 
 class AndroidAttendeeDetails {
-  AndroidAttendanceStatus _attendanceStatus;
-
   /// An attendee role: None, Optional, Required or Resource
   AttendeeRole role;
 
-  /// The attendee's status for the event. This is read-only
-  AndroidAttendanceStatus get attendanceStatus => _attendanceStatus;
+  AndroidAttendanceStatus attendanceStatus;
 
-  AndroidAttendeeDetails({@required this.role});
+  AndroidAttendeeDetails({@required this.role, this.attendanceStatus});
 
   AndroidAttendeeDetails.fromJson(Map<String, dynamic> json) {
     if (json == null) {
@@ -23,12 +20,15 @@ class AndroidAttendeeDetails {
     role = AttendeeRole.values[json['role']];
 
     if (json['attendanceStatus'] != null && json['attendanceStatus'] is int) {
-      _attendanceStatus =
+      attendanceStatus =
           AndroidAttendanceStatus.values[json['attendanceStatus']];
     }
   }
 
   Map<String, dynamic> toJson() {
-    return <String, dynamic>{'role': role?.index};
+    return <String, dynamic>{
+      'role': role?.index,
+      'attendanceStatus': attendanceStatus?.index
+    };
   }
 }

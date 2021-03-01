@@ -59,6 +59,7 @@ class DeviceCalendarPlugin() : MethodCallHandler {
     private val CALENDAR_COLOR_ARGUMENT = "calendarColor"
     private val LOCAL_ACCOUNT_NAME_ARGUMENT = "localAccountName"
     private val EVENT_AVAILABILITY_ARGUMENT = "availability"
+    private val ATTENDANCE_STATUS_ARGUMENT = "attendanceStatus"
 
 
     private lateinit var _registrar: Registrar
@@ -169,6 +170,7 @@ class DeviceCalendarPlugin() : MethodCallHandler {
                         attendeeArgs[EMAIL_ADDRESS_ARGUMENT] as String,
                         attendeeArgs[NAME_ARGUMENT] as String?,
                         attendeeArgs[ROLE_ARGUMENT] as Int,
+                        attendeeArgs[ATTENDANCE_STATUS_ARGUMENT] as Int?,
                         null, null))
             }
         }
