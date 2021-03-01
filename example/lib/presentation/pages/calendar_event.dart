@@ -264,7 +264,7 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                         },
                       ),
                     ),
-                    if (!_event.allDay) ...[
+                    if (!_event.allDay)
                       if (Platform.isAndroid)
                         Padding(
                           padding: const EdgeInsets.all(10.0),
@@ -278,10 +278,12 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                             },
                           ),
                         ),
+                    if (!_event.allDay || Platform.isAndroid)
                       Padding(
                         padding: const EdgeInsets.all(10.0),
                         child: DateTimePicker(
                           labelText: 'To',
+                          enableTime: !_event.allDay,
                           selectedDate: _endDate,
                           selectedTime: _endTime,
                           selectDate: (DateTime date) {
@@ -304,23 +306,24 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                           },
                         ),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.all(10.0),
-                        child: TextFormField(
-                          initialValue: Platform.isAndroid
-                              ? _event.endTimeZone
-                              : _event.startTimeZone,
-                          decoration: InputDecoration(
-                              labelText: Platform.isAndroid
-                                  ? 'End date time zone'
-                                  : 'Start and end time zone',
-                              hintText: 'Australia/Sydney'),
-                          onSaved: (String value) => Platform.isAndroid
-                              ? _event.endTimeZone = value
-                              : _event.startTimeZone = value,
+                    if (!_event.allDay)
+                      if (Platform.isAndroid)
+                        Padding(
+                          padding: const EdgeInsets.all(10.0),
+                          child: TextFormField(
+                            initialValue: Platform.isAndroid
+                                ? _event.endTimeZone
+                                : _event.startTimeZone,
+                            decoration: InputDecoration(
+                                labelText: Platform.isAndroid
+                                    ? 'End date time zone'
+                                    : 'Start and end time zone',
+                                hintText: 'Australia/Sydney'),
+                            onSaved: (String value) => Platform.isAndroid
+                                ? _event.endTimeZone = value
+                                : _event.startTimeZone = value,
+                          ),
                         ),
-                      ),
-                    ],
                     GestureDetector(
                       onTap: () async {
                         var result = await Navigator.push(

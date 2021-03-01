@@ -470,20 +470,33 @@ class CalendarDelegate : PluginRegistry.RequestPermissionsResultListener {
         values.put(Events.ALL_DAY, event.allDay)
 
         if (event.allDay) {
-            val calendar = java.util.Calendar.getInstance()
-            calendar.timeInMillis = event.start!!
-            calendar.set(java.util.Calendar.HOUR, 0)
-            calendar.set(java.util.Calendar.MINUTE, 0)
-            calendar.set(java.util.Calendar.SECOND, 0)
-            calendar.set(java.util.Calendar.MILLISECOND, 0)
+            val calendarStart = java.util.Calendar.getInstance()
+            calendarStart.timeInMillis = event.start!!
+            calendarStart.set(java.util.Calendar.HOUR, 0)
+            calendarStart.set(java.util.Calendar.MINUTE, 0)
+            calendarStart.set(java.util.Calendar.SECOND, 0)
+            calendarStart.set(java.util.Calendar.MILLISECOND, 0)
 
-            // All day events must have UTC timezone
+            // All Day events can span multiple days, but must also end at midnight
+            val calendarEnd = java.util.Calendar.getInstance()
+            calendarEnd.timeInMillis = event.end!!
+            calendarEnd.set(java.util.Calendar.HOUR, 0)
+            calendarEnd.set(java.util.Calendar.MINUTE, 0)
+            calendarEnd.set(java.util.Calendar.SECOND, 0)
+            calendarEnd.set(java.util.Calendar.MILLISECOND, 0)
+
+            // Add one day to the end date since All-Day events in Calendar Provider end at
+            // midnight at the beginning of the next day.
+            calendarEnd.add(java.util.Calendar.DATE, 1)
+
+            // All day events must have UTC timezone. Note: we don't need to set the
+            // utc timezone for the Calendars here. We just need to set it in the Event.
             val utcTimeZone = TimeZone.getTimeZone("UTC")
-            calendar.timeZone = utcTimeZone
 
-            values.put(Events.DTSTART, calendar.timeInMillis)
-            values.put(Events.DTEND, calendar.timeInMillis)
+            values.put(Events.DTSTART, calendarStart.timeInMillis)
+            values.put(Events.DTEND, calendarEnd.timeInMillis)
             values.put(Events.EVENT_TIMEZONE, utcTimeZone.id)
+            values.put(Events.EVENT_END_TIMEZONE, utcTimeZone.id)
         } else {
             values.put(Events.DTSTART, event.start!!)
             values.put(Events.EVENT_TIMEZONE, getTimeZone(event.startTimeZone).id)

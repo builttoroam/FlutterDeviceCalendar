@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:device_calendar/device_calendar.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -25,6 +27,7 @@ class EventItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    print(_calendarEvent.title);
     return GestureDetector(
       onTap: () {
         _onTapped(_calendarEvent);
@@ -54,9 +57,7 @@ class EventItem extends StatelessWidget {
                         ),
                         Text(_calendarEvent == null
                             ? ''
-                            : DateFormat.yMd()
-                                .add_jm()
-                                .format(_calendarEvent.start)),
+                            : _formatDateTime(dateTime: _calendarEvent.start)),
                       ],
                     ),
                   ),
@@ -73,9 +74,8 @@ class EventItem extends StatelessWidget {
                         ),
                         Text(_calendarEvent.end == null
                             ? ''
-                            : DateFormat.yMd()
-                                .add_jm()
-                                .format(_calendarEvent.end)),
+                            : _formatDateTime(
+                                dateTime: _calendarEvent.end, isEndDate: true)),
                       ],
                     ),
                   ),
@@ -251,5 +251,38 @@ class EventItem extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Formats [dateTime] into a human-readable string.
+  /// If [_calendarEvent] is an allDay event, then the output will omit the time.
+  /// For Android allDay events, the Calendar Provider returns the time
+  /// adjusted into local time, which may change the date. In that case
+  /// (Android allDay event), the time is adjusted back to UTC before
+  /// formatting the date.
+  /// Also, for Android allDay events, the End Date falls on midnight at the
+  /// beginning of the day after the End Date, so this function subtracts a
+  /// day before printing the date when [isEndDate] = true
+  String _formatDateTime({DateTime dateTime, bool isEndDate = false}) {
+    if (dateTime == null) {
+      return 'Error';
+    }
+    var output = '';
+    if (Platform.isAndroid &&
+        _calendarEvent.allDay != null &&
+        _calendarEvent.allDay) {
+      var offset = dateTime.timeZoneOffset.inMilliseconds;
+      // subtract the offset to get back to midnight on the correct date
+      dateTime = dateTime.subtract(Duration(milliseconds: offset));
+      if (isEndDate) {
+        // The Event End Date for allDay events is midnight of the next day, so
+        // subtract one day
+        dateTime = dateTime.subtract(Duration(days: 1));
+      }
+      // just the dates, no times
+      output = DateFormat.yMd().format(dateTime);
+    } else {
+      output = DateFormat.yMd().add_jm().format(dateTime);
+    }
+    return output;
   }
 }
