@@ -40,9 +40,10 @@ class _CalendarEventsPageState extends State<CalendarEventsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
         key: _scaffoldstate,
-        appBar: AppBar(title: Text('${_calendar.name} events'),actions: [
-          _getDeleteButton()
-        ],),
+        appBar: AppBar(
+          title: Text('${_calendar.name} events'),
+          actions: [_getDeleteButton()],
+        ),
         body: (_calendarEvents.isNotEmpty || _isLoading)
             ? Stack(
                 children: [
@@ -55,7 +56,8 @@ class _CalendarEventsPageState extends State<CalendarEventsPage> {
                           _onLoading,
                           _onDeletedFinished,
                           _onTapped,
-                          _calendar.isReadOnly != null && _calendar.isReadOnly as bool);
+                          _calendar.isReadOnly != null &&
+                              _calendar.isReadOnly as bool);
                     },
                   ),
                   if (_isLoading)
@@ -98,7 +100,6 @@ class _CalendarEventsPageState extends State<CalendarEventsPage> {
     if (deleteSucceeded) {
       await _retrieveCalendarEvents();
     } else {
-      
       _scaffoldstate.currentState!.showSnackBar(SnackBar(
         content: Text('Oops, we ran into an issue deleting the event'),
         backgroundColor: Colors.red,
@@ -166,8 +167,10 @@ class _CalendarEventsPageState extends State<CalendarEventsPage> {
           actions: <Widget>[
             TextButton(
               onPressed: () async {
-                var returnValue = await _deviceCalendarPlugin.deleteCalendar(_calendar.id!);
-                print('returnValue: ${returnValue.data}, ${returnValue.errors}');
+                var returnValue =
+                    await _deviceCalendarPlugin.deleteCalendar(_calendar.id!);
+                print(
+                    'returnValue: ${returnValue.data}, ${returnValue.errors}');
                 Navigator.of(context).pop();
                 Navigator.of(context).pop();
               },
@@ -185,5 +188,3 @@ class _CalendarEventsPageState extends State<CalendarEventsPage> {
     );
   }
 }
-
-

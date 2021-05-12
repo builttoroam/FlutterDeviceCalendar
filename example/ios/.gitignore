@@ -41,4 +41,5 @@ Icon?
 /Flutter/Generated.xcconfig
 /ServiceDefinitions.json
 
+**/.symlinks/
 Pods/

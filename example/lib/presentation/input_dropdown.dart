@@ -29,7 +29,7 @@ class InputDropdown extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            if(valueText != null) Text(valueText!, style: valueStyle),
+            if (valueText != null) Text(valueText!, style: valueStyle),
             Icon(Icons.arrow_drop_down,
                 color: Theme.of(context).brightness == Brightness.light
                     ? Colors.grey.shade700

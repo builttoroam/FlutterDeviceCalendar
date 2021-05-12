@@ -3,6 +3,8 @@ import '../common/calendar_enums.dart';
 import '../common/error_messages.dart';
 import 'attendee.dart';
 import 'recurrence_rule.dart';
+import 'package:timezone/timezone.dart';
+import 'package:collection/collection.dart';
 
 /// An event associated with a calendar
 class Event {
@@ -19,18 +21,10 @@ class Event {
   String? description;
 
   /// Indicates when the event starts
-  DateTime? start;
+  TZDateTime? start;
 
   /// Indicates when the event ends
-  DateTime? end;
-
-  /// Time zone of the event start date\
-  /// **Note**: In iOS this will set time zones for both start and end date
-  String? startTimeZone;
-
-  /// Time zone of the event end date\
-  /// **Note**: Not used in iOS, only single time zone is used. Please use `startTimeZone`
-  String? endTimeZone;
+  TZDateTime? end;
 
   /// Indicates if this is an all-day event
   bool? allDay;
@@ -51,20 +45,18 @@ class Event {
   List<Reminder>? reminders;
 
   /// Indicates if this event counts as busy time, tentative, unavaiable or is still free time
-  Availability? availability;
+  late Availability availability;
 
   Event(this.calendarId,
       {this.eventId,
       this.title,
       this.start,
       this.end,
-      this.startTimeZone,
-      this.endTimeZone,
       this.description,
       this.attendees,
       this.recurrenceRule,
       this.reminders,
-      this.availability,
+      required this.availability,
       this.allDay = false});
 
   Event.fromJson(Map<String, dynamic>? json) {
@@ -76,16 +68,23 @@ class Event {
     calendarId = json['calendarId'];
     title = json['title'];
     description = json['description'];
-    int? startMillisecondsSinceEpoch = json['start'];
-    if (startMillisecondsSinceEpoch != null) {
-      start = DateTime.fromMillisecondsSinceEpoch(startMillisecondsSinceEpoch);
-    }
-    int? endMillisecondsSinceEpoch = json['end'];
-    if (endMillisecondsSinceEpoch != null) {
-      end = DateTime.fromMillisecondsSinceEpoch(endMillisecondsSinceEpoch);
-    }
-    startTimeZone = json['startTimeZone'];
-    endTimeZone = json['endTimeZone'];
+
+    final int? startTimestamp = json['start'];
+    final String? startLocationName = json['startTimeZone'];
+    var startTimeZone = timeZoneDatabase.locations[startLocationName];
+    startTimeZone ??= local;
+    start = startTimestamp != null
+        ? TZDateTime.fromMillisecondsSinceEpoch(startTimeZone, startTimestamp)
+        : TZDateTime.now(local);
+
+    final int? endTimestamp = json['end'];
+    final String? endLocationName = json['endTimeZone'];
+    var endLocation = timeZoneDatabase.locations[endLocationName];
+    endLocation ??= local;
+    end = endTimestamp != null
+        ? TZDateTime.fromMillisecondsSinceEpoch(endLocation, endTimestamp)
+        : TZDateTime.now(local);
+
     allDay = json['allDay'];
     location = json['location'];
     availability = parseStringToAvailability(json['availability']);
@@ -97,26 +96,30 @@ class Event {
       url = Uri.dataFromString(foundUrl as String);
     }
 
+    availability = parseStringToAvailability(json['availability']);
+
     if (json['attendees'] != null) {
       attendees = json['attendees'].map<Attendee>((decodedAttendee) {
         return Attendee.fromJson(decodedAttendee);
       }).toList();
     }
-    if (json['recurrenceRule'] != null) {
-      recurrenceRule = RecurrenceRule.fromJson(json['recurrenceRule']);
-    }
+
     if (json['organizer'] != null) {
       // Getting and setting an organiser for iOS
       var organiser = Attendee.fromJson(json['organizer']);
 
-      var attendee = attendees?.firstWhere(
-          (at) =>
-              at?.name == organiser.name &&
-              at?.emailAddress == organiser.emailAddress);
+      var attendee = attendees?.firstWhereOrNull((at) =>
+          at?.name == organiser.name &&
+          at?.emailAddress == organiser.emailAddress);
       if (attendee != null) {
         attendee.isOrganiser = true;
       }
     }
+
+    if (json['recurrenceRule'] != null) {
+      recurrenceRule = RecurrenceRule.fromJson(json['recurrenceRule']);
+    }
+
     if (json['reminders'] != null) {
       reminders = json['reminders'].map<Reminder>((decodedReminder) {
         return Reminder.fromJson(decodedReminder);
@@ -131,21 +134,28 @@ class Event {
     data['eventId'] = eventId;
     data['eventTitle'] = title;
     data['eventDescription'] = description;
-    data['eventStartDate'] = start?.millisecondsSinceEpoch;
-    data['eventEndDate'] = end?.millisecondsSinceEpoch;
-    data['eventStartTimeZone'] = startTimeZone;
-    data['eventEndTimeZone'] = endTimeZone;
+    data['eventStartDate'] = start!.millisecondsSinceEpoch;
+    data['eventStartTimeZone'] = start?.location.name;
+    data['eventEndDate'] = end!.millisecondsSinceEpoch;
+    data['eventEndTimeZone'] = end?.location.name;
     data['eventAllDay'] = allDay;
     data['eventLocation'] = location;
     data['eventURL'] = url?.data?.contentText;
-    data['availability'] = availability?.enumToString;
+    data['availability'] = availability.enumToString;
 
     if (attendees != null) {
       data['attendees'] = attendees?.map((a) => a?.toJson()).toList();
     }
+
+    if (attendees != null) {
+      data['organizer'] =
+          attendees?.firstWhereOrNull((a) => a!.isOrganiser)?.toJson();
+    }
+
     if (recurrenceRule != null) {
       data['recurrenceRule'] = recurrenceRule?.toJson();
     }
+
     if (reminders != null) {
       data['reminders'] = reminders?.map((r) => r.toJson()).toList();
     }
@@ -153,8 +163,9 @@ class Event {
     return data;
   }
 
-  Availability? parseStringToAvailability(String value) {
-    switch (value) {
+  Availability parseStringToAvailability(String? value) {
+    var testValue = value?.toUpperCase();
+    switch (testValue) {
       case 'BUSY':
         return Availability.Busy;
       case 'FREE':
@@ -164,6 +175,28 @@ class Event {
       case 'UNAVAILABLE':
         return Availability.Unavailable;
     }
-    return null;
+    return Availability.Busy;
+  }
+
+  bool updateStartLocation(String? newStartLocation) {
+    if (newStartLocation == null) return false;
+    try {
+      var location = timeZoneDatabase.get(newStartLocation);
+      start = TZDateTime.from(start as TZDateTime, location);
+      return true;
+    } on LocationNotFoundException {
+      return false;
+    }
+  }
+
+  bool updateEndLocation(String? newEndLocation) {
+    if (newEndLocation == null) return false;
+    try {
+      var location = timeZoneDatabase.get(newEndLocation);
+      end = TZDateTime.from(end as TZDateTime, location);
+      return true;
+    } on LocationNotFoundException {
+      return false;
+    }
   }
 }

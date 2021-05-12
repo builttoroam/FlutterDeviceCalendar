@@ -10,6 +10,8 @@ import '../date_time_picker.dart';
 import '../recurring_event_dialog.dart';
 import 'event_attendee.dart';
 import 'event_reminders.dart';
+import 'package:timezone/timezone.dart';
+import 'package:flutter_native_timezone/flutter_native_timezone.dart';
 
 enum RecurrenceRuleEndType { Indefinite, MaxOccurrences, SpecifiedEndDate }
 
@@ -35,10 +37,10 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
   late DeviceCalendarPlugin _deviceCalendarPlugin;
   final RecurringEventDialog? _recurringEventDialog;
 
-  late DateTime _startDate;
+  TZDateTime? _startDate;
   late TimeOfDay _startTime;
 
-  late DateTime _endDate;
+  TZDateTime? _endDate;
   late TimeOfDay _endTime;
 
   bool _autovalidate = false;
@@ -53,17 +55,28 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
   RecurrenceFrequency? _recurrenceFrequency = RecurrenceFrequency.Daily;
   List<DayOfWeek> _daysOfWeek = [];
   int? _dayOfMonth;
-  List<int> _validDaysOfMonth = [];
+  final List<int> _validDaysOfMonth = [];
   MonthOfYear? _monthOfYear;
   WeekNumber? _weekOfMonth;
   DayOfWeek? _selectedDayOfWeek = DayOfWeek.Monday;
-  Availability? _availability = Availability.Busy;
+  Availability _availability = Availability.Busy;
 
   List<Attendee> _attendees = [];
   List<Reminder> _reminders = [];
+  String _timezone = 'Etc/UTC';
 
   _CalendarEventPageState(
       this._calendar, this._event, this._recurringEventDialog) {
+    getCurentLocation();
+  }
+
+  void getCurentLocation() async {
+    try {
+      _timezone = await FlutterNativeTimezone.getLocalTimezone();
+    } catch (e) {
+      print('Could not get the local timezone');
+    }
+
     _deviceCalendarPlugin = DeviceCalendarPlugin();
 
     _attendees = <Attendee>[];
@@ -71,11 +84,22 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
     _recurrenceRuleEndType = RecurrenceRuleEndType.Indefinite;
 
     if (_event == null) {
-      _startDate = DateTime.now();
-      _endDate = DateTime.now().add(Duration(hours: 1));
-      _event = Event(_calendar.id, start: _startDate, end: _endDate);
+      print('calendar_event _timezone ------------------------- $_timezone');
+      var currentLocation = timeZoneDatabase.locations[_timezone];
+      if (currentLocation != null) {
+        _startDate = TZDateTime.now(currentLocation);
+        _endDate = TZDateTime.now(currentLocation).add(Duration(hours: 1));
+      } else {
+        var fallbackLocation = timeZoneDatabase.locations['Etc/UTC'];
+        _startDate = TZDateTime.now(fallbackLocation!);
+        _endDate = TZDateTime.now(fallbackLocation).add(Duration(hours: 1));
+      }
+      _event = Event(_calendar.id,
+          start: _startDate, end: _endDate, availability: Availability.Busy);
 
-      _recurrenceEndDate = _endDate;
+      print('DeviceCalendarPlugin calendar id is: ${_calendar.id}');
+
+      _recurrenceEndDate = _endDate as DateTime;
       _dayOfMonth = 1;
       _monthOfYear = MonthOfYear.January;
       _weekOfMonth = WeekNumber.First;
@@ -109,10 +133,11 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
 
         _isByDayOfMonth = _event?.recurrenceRule?.weekOfMonth == null;
         _daysOfWeek = _event?.recurrenceRule?.daysOfWeek ?? <DayOfWeek>[];
-        _monthOfYear = _event?.recurrenceRule?.monthOfYear ?? MonthOfYear.January;
+        _monthOfYear =
+            _event?.recurrenceRule?.monthOfYear ?? MonthOfYear.January;
         _weekOfMonth = _event?.recurrenceRule?.weekOfMonth ?? WeekNumber.First;
         _selectedDayOfWeek =
-            _daysOfWeek.isNotEmpty ? _daysOfWeek.first : DayOfWeek.Monday;
+        _daysOfWeek.isNotEmpty ? _daysOfWeek.first : DayOfWeek.Monday;
         _dayOfMonth = _event?.recurrenceRule?.dayOfMonth ?? 1;
 
         if (_daysOfWeek.isNotEmpty) {
@@ -120,23 +145,24 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
         }
       }
 
-      _availability = _event?.availability;
+      _availability = _event!.availability;
     }
 
-    _startTime = TimeOfDay(hour: _startDate.hour, minute: _startDate.minute);
-    _endTime = TimeOfDay(hour: _endDate.hour, minute: _endDate.minute);
+    _startTime = TimeOfDay(hour: _startDate!.hour, minute: _startDate!.minute);
+    _endTime = TimeOfDay(hour: _endDate!.hour, minute: _endDate!.minute);
 
     // Getting days of the current month (or a selected month for the yearly recurrence) as a default
     _getValidDaysOfMonth(_recurrenceFrequency);
+    setState(() {});
   }
 
   void printAttendeeDetails(Attendee attendee) {
     print(
-        'attendee name: ${attendee.name}, email address: ${attendee.emailAddress}, type: ${attendee.iosAttendeeDetails?.role?.enumToString}');
+        'attendee name: ${attendee.name}, email address: ${attendee.emailAddress}, type: ${attendee.role?.enumToString}');
     print(
-        'ios specifics - status: ${attendee.iosAttendeeDetails?.attendanceStatus}, type: ${attendee.iosAttendeeDetails?.role?.enumToString}');
+        'ios specifics - status: ${attendee.iosAttendeeDetails?.attendanceStatus}, type: ${attendee.iosAttendeeDetails?.attendanceStatus?.enumToString}');
     print(
-        'android specifics - status ${attendee.androidAttendeeDetails?.attendanceStatus}, type: ${attendee.androidAttendeeDetails?.role?.enumToString}');
+        'android specifics - status ${attendee.androidAttendeeDetails?.attendanceStatus}, type: ${attendee.androidAttendeeDetails?.attendanceStatus?.enumToString}');
   }
 
   @override
@@ -205,7 +231,7 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                         decoration: const InputDecoration(
                             labelText: 'URL', hintText: 'https://google.com'),
                         onSaved: (String? value) {
-                          if(value != null) {
+                          if (value != null) {
                             var uri = Uri.dataFromString(value);
                             _event?.url = uri;
                           }
@@ -221,8 +247,10 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                         value: _availability,
                         onChanged: (Availability? newValue) {
                           setState(() {
-                            _availability = newValue;
-                            _event?.availability = newValue;
+                            if (newValue != null) {
+                              _availability = newValue;
+                              _event?.availability = newValue;
+                            }
                           });
                         },
                         items: Availability.values
@@ -241,42 +269,48 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                           setState(() => _event?.allDay = value),
                       title: Text('All Day'),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.all(10.0),
-                      child: DateTimePicker(
-                        labelText: 'From',
-                        enableTime: _event?.allDay == false,
-                        selectedDate: _startDate,
-                        selectedTime: _startTime,
-                        selectDate: (DateTime date) {
-                          setState(() {
-                            _startDate = date;
-                            _event?.start =
-                                _combineDateWithTime(_startDate, _startTime);
-                          });
-                        },
-                        selectTime: (TimeOfDay time) {
-                          setState(
-                            () {
-                              _startTime = time;
-                              _event?.start =
-                                  _combineDateWithTime(_startDate, _startTime);
-                            },
-                          );
-                        },
+                    if (_startDate != null)
+                      Padding(
+                        padding: const EdgeInsets.all(10.0),
+                        child: DateTimePicker(
+                          labelText: 'From',
+                          enableTime: _event?.allDay == false,
+                          selectedDate: _startDate,
+                          selectedTime: _startTime,
+                          selectDate: (DateTime date) {
+                            setState(() {
+                              var currentLocation =
+                                  timeZoneDatabase.locations[_timezone];
+                              if (currentLocation != null) {
+                                _startDate =
+                                    TZDateTime.from(date, currentLocation);
+                                _event?.start = _combineDateWithTime(
+                                    _startDate, _startTime);
+                              }
+                            });
+                          },
+                          selectTime: (TimeOfDay time) {
+                            setState(
+                              () {
+                                _startTime = time;
+                                _event?.start = _combineDateWithTime(
+                                    _startDate, _startTime);
+                              },
+                            );
+                          },
+                        ),
                       ),
-                    ),
                     if (_event?.allDay == false) ...[
                       if (Platform.isAndroid)
                         Padding(
                           padding: const EdgeInsets.all(10.0),
                           child: TextFormField(
-                            initialValue: _event?.startTimeZone,
+                            initialValue: _event?.start?.location.name,
                             decoration: const InputDecoration(
                                 labelText: 'Start date time zone',
                                 hintText: 'Australia/Sydney'),
                             onSaved: (String? value) {
-                              _event?.startTimeZone = value;
+                              _event?.updateStartLocation(value);
                             },
                           ),
                         ),
@@ -289,9 +323,14 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                           selectDate: (DateTime date) {
                             setState(
                               () {
-                                _endDate = date;
-                                _event?.end =
-                                    _combineDateWithTime(_endDate, _endTime);
+                                var currentLocation =
+                                    timeZoneDatabase.locations[_timezone];
+                                if (currentLocation != null) {
+                                  _endDate =
+                                      TZDateTime.from(date, currentLocation);
+                                  _event?.end =
+                                      _combineDateWithTime(_endDate, _endTime);
+                                }
                               },
                             );
                           },
@@ -309,17 +348,12 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                       Padding(
                         padding: const EdgeInsets.all(10.0),
                         child: TextFormField(
-                          initialValue: Platform.isAndroid
-                              ? _event?.endTimeZone
-                              : _event?.startTimeZone,
+                          initialValue: _event?.end?.location.name,
                           decoration: InputDecoration(
-                              labelText: Platform.isAndroid
-                                  ? 'End date time zone'
-                                  : 'Start and end time zone',
+                              labelText: 'End date time zone',
                               hintText: 'Australia/Sydney'),
-                          onSaved: (String? value) => Platform.isAndroid
-                              ? _event?.endTimeZone = value
-                              : _event?.startTimeZone = value,
+                          onSaved: (String? value) =>
+                              _event?.updateEndLocation(value),
                         ),
                       ),
                     ],
@@ -364,14 +398,13 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                                 var result = await Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                        builder: (context) =>
-                                            EventAttendeePage(
-                                                attendee:
-                                                    _attendees[index])));
+                                        builder: (context) => EventAttendeePage(
+                                            attendee: _attendees[index])));
                                 if (result == null) return;
                                 _attendees[index] = result;
                               },
-                              child: Text('${_attendees[index].emailAddress}'),),
+                              child: Text('${_attendees[index].emailAddress}'),
+                            ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: <Widget>[
@@ -481,7 +514,8 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                                 validator: _validateInterval,
                                 textAlign: TextAlign.right,
                                 onSaved: (String? value) {
-                                  if(value != null) _interval = int.tryParse(value);
+                                  if (value != null)
+                                    _interval = int.tryParse(value);
                                 },
                               ),
                             ),
@@ -518,7 +552,8 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                                   groupValue: _dayOfWeekGroup,
                                   onChanged: (selected) {
                                     setState(() {
-                                      _dayOfWeekGroup = selected as DayOfWeekGroup;
+                                      _dayOfWeekGroup =
+                                          selected as DayOfWeekGroup;
                                       _updateDaysOfWeek();
                                     });
                                   },
@@ -591,10 +626,15 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                           padding: const EdgeInsets.fromLTRB(15, 10, 15, 10),
                           child: Align(
                               alignment: Alignment.centerLeft,
-                              child: _recurrenceFrequencyToText(_recurrenceFrequency).data != null
-                                  ? Text(_recurrenceFrequencyToText(_recurrenceFrequency).data! + ' on the ')
-                                  : Text('')
-                          ),
+                              child: _recurrenceFrequencyToText(
+                                              _recurrenceFrequency)
+                                          .data !=
+                                      null
+                                  ? Text(_recurrenceFrequencyToText(
+                                              _recurrenceFrequency)
+                                          .data! +
+                                      ' on the ')
+                                  : Text('')),
                         ),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(15, 0, 15, 10),
@@ -624,7 +664,10 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                                       _selectedDayOfWeek = value;
                                     });
                                   },
-                                  value: _selectedDayOfWeek != null? DayOfWeek.values[_selectedDayOfWeek!.index] : DayOfWeek.values[0],
+                                  value: _selectedDayOfWeek != null
+                                      ? DayOfWeek
+                                          .values[_selectedDayOfWeek!.index]
+                                      : DayOfWeek.values[0],
                                   items: DayOfWeek.values
                                       .map((day) => DropdownMenuItem(
                                             value: day,
@@ -696,7 +739,8 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                                   validator: _validateTotalOccurrences,
                                   textAlign: TextAlign.right,
                                   onSaved: (String? value) {
-                                    if(value != null) _totalOccurrences = int.tryParse(value);
+                                    if (value != null)
+                                      _totalOccurrences = int.tryParse(value);
                                   },
                                 ),
                               ),
@@ -728,9 +772,7 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                 ElevatedButton(
                   key: Key('deleteEventButton'),
                   style: ElevatedButton.styleFrom(
-                                      primary: Colors.red,
-                                      onPrimary: Colors.white
-                  ),
+                      primary: Colors.red, onPrimary: Colors.white),
                   onPressed: () async {
                     bool? result = true;
                     if (!_isRecurringEvent) {
@@ -741,7 +783,9 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                           context: context,
                           barrierDismissible: false,
                           builder: (BuildContext context) {
-                            return _recurringEventDialog != null ? _recurringEventDialog as Widget : SizedBox();
+                            return _recurringEventDialog != null
+                                ? _recurringEventDialog as Widget
+                                : SizedBox();
                           });
                     }
 
@@ -773,14 +817,18 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
                         _recurrenceFrequency == RecurrenceFrequency.Yearly)) {
                   // Setting day of the week parameters for WeekNumber to avoid clashing with the weekly recurrence values
                   _daysOfWeek.clear();
-                  if(_selectedDayOfWeek != null) _daysOfWeek.add(_selectedDayOfWeek as DayOfWeek);
+                  if (_selectedDayOfWeek != null)
+                    _daysOfWeek.add(_selectedDayOfWeek as DayOfWeek);
                 } else {
                   _weekOfMonth = null;
                 }
 
                 _event?.recurrenceRule = RecurrenceRule(_recurrenceFrequency,
                     interval: _interval,
-                    totalOccurrences: _totalOccurrences,
+                    totalOccurrences: (_recurrenceRuleEndType ==
+                            RecurrenceRuleEndType.MaxOccurrences)
+                        ? _totalOccurrences
+                        : null,
                     endDate: _recurrenceRuleEndType ==
                             RecurrenceRuleEndType.SpecifiedEndDate
                         ? _recurrenceEndDate
@@ -825,7 +873,8 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
     }
   }
 
-  Text _recurrenceFrequencyToIntervalText(RecurrenceFrequency? recurrenceFrequency) {
+  Text _recurrenceFrequencyToIntervalText(
+      RecurrenceFrequency? recurrenceFrequency) {
     switch (recurrenceFrequency) {
       case RecurrenceFrequency.Daily:
         return Text(' Day(s)');
@@ -860,7 +909,9 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
 
     // Year frequency: Get total days of the selected month
     if (frequency == RecurrenceFrequency.Yearly) {
-      totalDays = DateTime(DateTime.now().year, _monthOfYear?.value != null ? _monthOfYear!.value + 1 : 1, 0).day;
+      totalDays = DateTime(DateTime.now().year,
+              _monthOfYear?.value != null ? _monthOfYear!.value + 1 : 1, 0)
+          .day;
     } else {
       // Otherwise, get total days of the current month
       var now = DateTime.now();
@@ -873,7 +924,7 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
   }
 
   void _updateDaysOfWeek() {
-    if(_dayOfWeekGroup == null) return;
+    if (_dayOfWeekGroup == null) return;
     var days = _dayOfWeekGroup!.getDays;
 
     switch (_dayOfWeekGroup) {
@@ -886,7 +937,8 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
       case DayOfWeekGroup.None:
         _daysOfWeek.clear();
         break;
-      default:         _daysOfWeek.clear();
+      default:
+        _daysOfWeek.clear();
     }
   }
 
@@ -919,7 +971,7 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
   }
 
   String? _validateTotalOccurrences(String? value) {
-    if(value == null) return null;
+    if (value == null) return null;
     if (value.isNotEmpty && int.tryParse(value) == null) {
       return 'Total occurrences needs to be a valid number';
     }
@@ -927,7 +979,7 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
   }
 
   String? _validateInterval(String? value) {
-    if(value == null) return null;
+    if (value == null) return null;
     if (value.isNotEmpty && int.tryParse(value) == null) {
       return 'Interval needs to be a valid number';
     }
@@ -935,7 +987,7 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
   }
 
   String? _validateTitle(String? value) {
-    if(value == null) return null;
+    if (value == null) return null;
     if (value.isEmpty) {
       return 'Name is required.';
     }
@@ -943,14 +995,18 @@ class _CalendarEventPageState extends State<CalendarEventPage> {
     return null;
   }
 
-  DateTime? _combineDateWithTime(DateTime? date, TimeOfDay? time) {
+  TZDateTime? _combineDateWithTime(TZDateTime? date, TimeOfDay? time) {
     if (date == null) return null;
+    var currentLocation = timeZoneDatabase.locations[_timezone];
 
-    final dateWithoutTime = DateTime.parse(DateFormat('y-MM-dd 00:00:00').format(date));
+    final dateWithoutTime = TZDateTime.from(
+        DateTime.parse(DateFormat('y-MM-dd 00:00:00').format(date)),
+        currentLocation!);
 
     if (time == null) return dateWithoutTime;
 
-    return dateWithoutTime.add(Duration(hours: time.hour, minutes: time.minute));
+    return dateWithoutTime
+        .add(Duration(hours: time.hour, minutes: time.minute));
   }
 
   void showInSnackBar(String value) {

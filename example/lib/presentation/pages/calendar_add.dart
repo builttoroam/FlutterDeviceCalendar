@@ -106,7 +106,7 @@ class _CalendarAddPageState extends State<CalendarAddPage> {
   }
 
   String? _validateCalendarName(String? value) {
-    if(value == null) return null;
+    if (value == null) return null;
     if (value.isEmpty) {
       return 'Calendar name is required.';
     }

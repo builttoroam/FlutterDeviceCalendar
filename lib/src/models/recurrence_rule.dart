@@ -53,7 +53,8 @@ class RecurrenceRule {
     }
 
     int? recurrenceFrequencyIndex = json[_recurrenceFrequencyKey];
-    if (recurrenceFrequencyIndex == null || recurrenceFrequencyIndex >= RecurrenceFrequency.values.length) {
+    if (recurrenceFrequencyIndex == null ||
+        recurrenceFrequencyIndex >= RecurrenceFrequency.values.length) {
       throw ArgumentError(ErrorMessages.invalidRecurrencyFrequency);
     }
     recurrenceFrequency = RecurrenceFrequency.values[recurrenceFrequencyIndex];

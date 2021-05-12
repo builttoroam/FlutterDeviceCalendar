@@ -2,20 +2,26 @@ PODS:
   - device_calendar (0.0.1):
     - Flutter
   - Flutter (1.0.0)
+  - flutter_native_timezone (0.0.1):
+    - Flutter
 
 DEPENDENCIES:
   - device_calendar (from `.symlinks/plugins/device_calendar/ios`)
   - Flutter (from `Flutter`)
+  - flutter_native_timezone (from `.symlinks/plugins/flutter_native_timezone/ios`)
 
 EXTERNAL SOURCES:
   device_calendar:
     :path: ".symlinks/plugins/device_calendar/ios"
   Flutter:
     :path: Flutter
+  flutter_native_timezone:
+    :path: ".symlinks/plugins/flutter_native_timezone/ios"
 
 SPEC CHECKSUMS:
   device_calendar: 9cb33f88a02e19652ec7b8b122ca778f751b1f7b
   Flutter: 434fef37c0980e73bb6479ef766c45957d4b510c
+  flutter_native_timezone: 5f05b2de06c9776b4cc70e1839f03de178394d22
 
 PODFILE CHECKSUM: d3740c426905916d1f2ada0ddfce28cc99f7b7af
 

@@ -141,7 +141,7 @@ class CalendarDelegate : PluginRegistry.RequestPermissionsResultListener {
                     createOrUpdateEvent(cachedValues.calendarId, cachedValues.event, cachedValues.pendingChannelResult)
                 }
                 DELETE_EVENT_REQUEST_CODE -> {
-                    deleteEvent(cachedValues.eventId, cachedValues.calendarId, cachedValues.pendingChannelResult)
+                    deleteEvent(cachedValues.calendarId, cachedValues.eventId, cachedValues.pendingChannelResult)
                 }
                 REQUEST_PERMISSIONS_REQUEST_CODE -> {
                     finishWithSuccess(permissionGranted, cachedValues.pendingChannelResult)
@@ -477,13 +477,9 @@ class CalendarDelegate : PluginRegistry.RequestPermissionsResultListener {
             calendar.set(java.util.Calendar.SECOND, 0)
             calendar.set(java.util.Calendar.MILLISECOND, 0)
 
-            // All day events must have UTC timezone
-            val utcTimeZone = TimeZone.getTimeZone("UTC")
-            calendar.timeZone = utcTimeZone
-
             values.put(Events.DTSTART, calendar.timeInMillis)
             values.put(Events.DTEND, calendar.timeInMillis)
-            values.put(Events.EVENT_TIMEZONE, utcTimeZone.id)
+            values.put(Events.EVENT_TIMEZONE, getTimeZone(event.startTimeZone).id)
         } else {
             values.put(Events.DTSTART, event.start!!)
             values.put(Events.EVENT_TIMEZONE, getTimeZone(event.startTimeZone).id)

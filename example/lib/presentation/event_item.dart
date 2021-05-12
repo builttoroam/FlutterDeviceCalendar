@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import 'recurring_event_dialog.dart';
+import 'package:timezone/timezone.dart';
+import 'package:flutter_native_timezone/flutter_native_timezone.dart';
 
-class EventItem extends StatelessWidget {
+class EventItem extends StatefulWidget {
   final Event? _calendarEvent;
   final DeviceCalendarPlugin _deviceCalendarPlugin;
   final bool _isReadOnly;
@@ -13,21 +15,38 @@ class EventItem extends StatelessWidget {
   final VoidCallback _onLoadingStarted;
   final Function(bool) _onDeleteFinished;
 
-  final double _eventFieldNameWidth = 75.0;
-
   EventItem(
       this._calendarEvent,
       this._deviceCalendarPlugin,
       this._onLoadingStarted,
       this._onDeleteFinished,
       this._onTapped,
-      this._isReadOnly);
+      this._isReadOnly,
+      {Key? key})
+      : super(key: key);
+
+  @override
+  _EventItemState createState() {
+    return _EventItemState();
+  }
+}
+
+class _EventItemState extends State<EventItem> {
+  final double _eventFieldNameWidth = 75.0;
+  Location? _currentLocation;
+
+  @override
+  void initState() {
+    super.initState();
+    setCurentLocation();
+  }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        if(_calendarEvent != null) _onTapped(_calendarEvent as Event);
+        if (widget._calendarEvent != null)
+          widget._onTapped(widget._calendarEvent as Event);
       },
       child: Card(
         child: Column(
@@ -38,47 +57,54 @@ class EventItem extends StatelessWidget {
               child: FlutterLogo(),
             ),
             ListTile(
-                title: Text(_calendarEvent?.title ?? ''),
-                subtitle: Text(_calendarEvent?.description ?? '')),
+                title: Text(widget._calendarEvent?.title ?? ''),
+                subtitle: Text(widget._calendarEvent?.description ?? '')),
             Container(
               padding: EdgeInsets.symmetric(horizontal: 16.0),
               child: Column(
                 children: [
-                  Align(
-                    alignment: Alignment.topLeft,
-                    child: Row(
-                      children: [
-                        Container(
-                          width: _eventFieldNameWidth,
-                          child: Text('Starts'),
-                        ),
-                        Text(_calendarEvent == null
-                            ? ''
-                            : DateFormat.yMd()
-                                .add_jm()
-                                .format(_calendarEvent?.start as DateTime)),
-                      ],
+                  if (_currentLocation != null)
+                    Align(
+                      alignment: Alignment.topLeft,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: _eventFieldNameWidth,
+                            child: Text('Starts'),
+                          ),
+                          Text(
+                            widget._calendarEvent == null
+                                ? ''
+                                : DateFormat('yyyy-MM-dd HH:mm:ss').format(
+                                    TZDateTime.from(
+                                        widget._calendarEvent!.start!,
+                                        _currentLocation!)),
+                          )
+                        ],
+                      ),
                     ),
-                  ),
                   Padding(
                     padding: EdgeInsets.symmetric(vertical: 5.0),
                   ),
-                  Align(
-                    alignment: Alignment.topLeft,
-                    child: Row(
-                      children: [
-                        Container(
-                          width: _eventFieldNameWidth,
-                          child: Text('Ends'),
-                        ),
-                        Text(_calendarEvent?.end == null
-                            ? ''
-                            : DateFormat.yMd()
-                                .add_jm()
-                                .format(_calendarEvent?.end as DateTime)),
-                      ],
+                  if (_currentLocation != null)
+                    Align(
+                      alignment: Alignment.topLeft,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: _eventFieldNameWidth,
+                            child: Text('Ends'),
+                          ),
+                          Text(
+                            widget._calendarEvent?.end == null
+                                ? ''
+                                : DateFormat('yyyy-MM-dd HH:mm:ss').format(
+                                    TZDateTime.from(widget._calendarEvent!.end!,
+                                        _currentLocation!)),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
                   SizedBox(
                     height: 10.0,
                   ),
@@ -90,8 +116,8 @@ class EventItem extends StatelessWidget {
                           width: _eventFieldNameWidth,
                           child: Text('All day?'),
                         ),
-                        Text(_calendarEvent?.allDay != null &&
-                                _calendarEvent?.allDay == true
+                        Text(widget._calendarEvent?.allDay != null &&
+                                widget._calendarEvent?.allDay == true
                             ? 'Yes'
                             : 'No')
                       ],
@@ -110,7 +136,7 @@ class EventItem extends StatelessWidget {
                         ),
                         Expanded(
                           child: Text(
-                            _calendarEvent?.location ?? '',
+                            widget._calendarEvent?.location ?? '',
                             overflow: TextOverflow.ellipsis,
                           ),
                         )
@@ -130,7 +156,7 @@ class EventItem extends StatelessWidget {
                         ),
                         Expanded(
                           child: Text(
-                            _calendarEvent?.url?.data?.contentText ?? '',
+                            widget._calendarEvent?.url?.data?.contentText ?? '',
                             overflow: TextOverflow.ellipsis,
                           ),
                         )
@@ -150,8 +176,11 @@ class EventItem extends StatelessWidget {
                         ),
                         Expanded(
                           child: Text(
-                            _calendarEvent?.attendees?.where((a) => a?.name?.isNotEmpty ?? false).map((a) => a?.name).join(', ')
-                             ?? '',
+                            widget._calendarEvent?.attendees
+                                    ?.where((a) => a?.name?.isNotEmpty ?? false)
+                                    .map((a) => a?.name)
+                                    .join(', ') ??
+                                '',
                             overflow: TextOverflow.ellipsis,
                           ),
                         )
@@ -171,7 +200,8 @@ class EventItem extends StatelessWidget {
                         ),
                         Expanded(
                           child: Text(
-                            _calendarEvent?.availability?.enumToString ?? '',
+                            widget._calendarEvent?.availability?.enumToString ??
+                                '',
                             overflow: TextOverflow.ellipsis,
                           ),
                         )
@@ -183,10 +213,11 @@ class EventItem extends StatelessWidget {
             ),
             ButtonBar(
               children: [
-                if (!_isReadOnly) ...[
+                if (!widget._isReadOnly) ...[
                   IconButton(
                     onPressed: () {
-                      if(_calendarEvent != null) _onTapped(_calendarEvent as Event);
+                      if (widget._calendarEvent != null)
+                        widget._onTapped(widget._calendarEvent as Event);
                     },
                     icon: Icon(Icons.edit),
                   ),
@@ -196,7 +227,7 @@ class EventItem extends StatelessWidget {
                         context: context,
                         barrierDismissible: false,
                         builder: (BuildContext context) {
-                          if (_calendarEvent?.recurrenceRule == null) {
+                          if (widget._calendarEvent?.recurrenceRule == null) {
                             return AlertDialog(
                               title: Text(
                                   'Are you sure you want to delete this event?'),
@@ -210,25 +241,28 @@ class EventItem extends StatelessWidget {
                                 TextButton(
                                   onPressed: () async {
                                     Navigator.of(context).pop();
-                                    _onLoadingStarted();
-                                    final deleteResult =
-                                        await _deviceCalendarPlugin.deleteEvent(
-                                            _calendarEvent?.calendarId,
-                                            _calendarEvent?.eventId);
-                                    _onDeleteFinished(deleteResult.isSuccess &&
-                                        deleteResult.data != null);
+                                    widget._onLoadingStarted();
+                                    final deleteResult = await widget
+                                        ._deviceCalendarPlugin
+                                        .deleteEvent(
+                                            widget._calendarEvent?.calendarId,
+                                            widget._calendarEvent?.eventId);
+                                    widget._onDeleteFinished(
+                                        deleteResult.isSuccess &&
+                                            deleteResult.data != null);
                                   },
                                   child: Text('Delete'),
                                 ),
                               ],
                             );
                           } else {
-                            if(_calendarEvent == null) return SizedBox();
+                            if (widget._calendarEvent == null)
+                              return SizedBox();
                             return RecurringEventDialog(
-                                _deviceCalendarPlugin,
-                                _calendarEvent!,
-                                _onLoadingStarted,
-                                _onDeleteFinished);
+                                widget._deviceCalendarPlugin,
+                                widget._calendarEvent!,
+                                widget._onLoadingStarted,
+                                widget._onDeleteFinished);
                           }
                         },
                       );
@@ -238,7 +272,8 @@ class EventItem extends StatelessWidget {
                 ] else ...[
                   IconButton(
                     onPressed: () {
-                      if(_calendarEvent != null) _onTapped(_calendarEvent!);
+                      if (widget._calendarEvent != null)
+                        widget._onTapped(widget._calendarEvent!);
                     },
                     icon: Icon(Icons.remove_red_eye),
                   ),
@@ -249,5 +284,17 @@ class EventItem extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void setCurentLocation() async {
+    String? timezone;
+    try {
+      timezone = await FlutterNativeTimezone.getLocalTimezone();
+    } catch (e) {
+      print('Could not get the local timezone');
+    }
+    timezone ??= 'Etc/UTC';
+    _currentLocation = timeZoneDatabase.locations[timezone];
+    setState(() {});
   }
 }
