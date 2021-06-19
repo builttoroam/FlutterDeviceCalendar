@@ -159,6 +159,26 @@ public class SwiftDeviceCalendarPlugin: NSObject, FlutterPlugin {
         result(hasPermissions)
     }
     
+    private func getSource() -> EKSource? {
+      let localSources = eventStore.sources.filter { $0.sourceType == .local }
+
+      if (!localSources.isEmpty) {
+        return localSources.first
+      }
+
+      if let defaultSource = eventStore.defaultCalendarForNewEvents?.source {
+        return defaultSource
+      }
+
+      let iCloudSources = eventStore.sources.filter { $0.sourceType == .calDAV && $0.sourceIdentifier == "iCloud" }
+
+      if (!iCloudSources.isEmpty) {
+        return iCloudSources.first
+      }
+
+      return nil
+    }
+
     private func createCalendar(_ call: FlutterMethodCall, _ result: FlutterResult) {
         let arguments = call.arguments as! Dictionary<String, AnyObject>
         let calendar = EKCalendar.init(for: EKEntityType.event, eventStore: eventStore)
@@ -173,17 +193,15 @@ public class SwiftDeviceCalendarPlugin: NSObject, FlutterPlugin {
                 calendar.cgColor = UIColor(red: 255, green: 0, blue: 0, alpha: 0).cgColor // Red colour as a default
             }
             
-            let localSources = eventStore.sources.filter { $0.sourceType == .local }
-            
-            if (!localSources.isEmpty) {
-                calendar.source = localSources.first
-                
-                try eventStore.saveCalendar(calendar, commit: true)
-                result(calendar.calendarIdentifier)
+            guard let source = getSource() else {
+              result(FlutterError(code: self.genericError, message: "Local calendar was not found.", details: nil))
+              return
             }
-            else {
-                result(FlutterError(code: self.genericError, message: "Local calendar was not found.", details: nil))
-            }
+
+            calendar.source = source
+
+            try eventStore.saveCalendar(calendar, commit: true)
+            result(calendar.calendarIdentifier)
         }
         catch {
             eventStore.reset()
@@ -263,36 +281,38 @@ public class SwiftDeviceCalendarPlugin: NSObject, FlutterPlugin {
             let calendarId = arguments[calendarIdArgument] as! String
             let startDateMillisecondsSinceEpoch = arguments[startDateArgument] as? NSNumber
             let endDateDateMillisecondsSinceEpoch = arguments[endDateArgument] as? NSNumber
-            let eventIds = arguments[eventIdsArgument] as? [String]
+            let eventIdArgs = arguments[eventIdsArgument] as? [String]
             var events = [Event]()
             let specifiedStartEndDates = startDateMillisecondsSinceEpoch != nil && endDateDateMillisecondsSinceEpoch != nil
             if specifiedStartEndDates {
                 let startDate = Date (timeIntervalSince1970: startDateMillisecondsSinceEpoch!.doubleValue / 1000.0)
                 let endDate = Date (timeIntervalSince1970: endDateDateMillisecondsSinceEpoch!.doubleValue / 1000.0)
-                let ekCalendar = self.eventStore.calendar(withIdentifier: calendarId)
-                let predicate = self.eventStore.predicateForEvents(withStart: startDate, end: endDate, calendars: [ekCalendar!])
-                let ekEvents = self.eventStore.events(matching: predicate)
-                for ekEvent in ekEvents {
-                    let event = createEventFromEkEvent(calendarId: calendarId, ekEvent: ekEvent)
-                    events.append(event)
+                
+                if let ekCalendar = self.eventStore.calendar(withIdentifier: calendarId) {
+                  let predicate = self.eventStore.predicateForEvents(withStart: startDate, end: endDate, calendars: [ekCalendar])
+                  let ekEvents = self.eventStore.events(matching: predicate)
+                  for ekEvent in ekEvents {
+                      let event = createEventFromEkEvent(calendarId: calendarId, ekEvent: ekEvent)
+                      events.append(event)
+                  }
                 }
             }
             
-            if eventIds == nil {
-                self.encodeJsonAndFinish(codable: events, result: result)
-                return
+            guard let eventIds = eventIdArgs else {
+              self.encodeJsonAndFinish(codable: events, result: result)
+              return
             }
             
             if specifiedStartEndDates {
                 events = events.filter({ (e) -> Bool in
-                    e.calendarId == calendarId && eventIds!.contains(e.eventId)
+                    e.calendarId == calendarId && eventIds.contains(e.eventId)
                 })
                 
                 self.encodeJsonAndFinish(codable: events, result: result)
                 return
             }
             
-            for eventId in eventIds! {
+            for eventId in eventIds {
                 let ekEvent = self.eventStore.event(withIdentifier: eventId)
                 if ekEvent == nil {
                     continue
