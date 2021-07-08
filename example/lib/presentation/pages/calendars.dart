@@ -122,9 +122,7 @@ class _CalendarsPageState extends State<CalendarsPage> {
   void _retrieveCalendars() async {
     try {
       var permissionsGranted = await _deviceCalendarPlugin.hasPermissions();
-      if (permissionsGranted.isSuccess &&
-          (permissionsGranted.data == null ||
-              permissionsGranted.data == false)) {
+      if (permissionsGranted.isSuccess && permissionsGranted.data != true) {
         permissionsGranted = await _deviceCalendarPlugin.requestPermissions();
         if (!permissionsGranted.isSuccess ||
             permissionsGranted.data == null ||

@@ -19,10 +19,10 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_native_timezone/ios"
 
 SPEC CHECKSUMS:
-  device_calendar: 23b28a5f1ab3bf77e34542fb1167e1b8b29a98f5
+  device_calendar: 9cb33f88a02e19652ec7b8b122ca778f751b1f7b
   Flutter: 434fef37c0980e73bb6479ef766c45957d4b510c
   flutter_native_timezone: 5f05b2de06c9776b4cc70e1839f03de178394d22
 
-PODFILE CHECKSUM: aafe91acc616949ddb318b77800a7f51bffa2a4c
+PODFILE CHECKSUM: d3740c426905916d1f2ada0ddfce28cc99f7b7af
 
 COCOAPODS: 1.10.1
