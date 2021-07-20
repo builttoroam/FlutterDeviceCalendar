@@ -325,7 +325,8 @@ class CalendarDelegate : PluginRegistry.RequestPermissionsResultListener {
             val eventsUri = eventsUriBuilder.build()
             val eventsCalendarQuery = "(${Events.CALENDAR_ID} = $calendarId)"
             val eventsNotDeletedQuery = "(${Events.DELETED} != 1)"
-            val eventsIdsQuery = "(${CalendarContract.Instances.EVENT_ID} IN (${eventIds.joinToString()}))"
+            val joinedEvents = eventIds.map{"'"+it+"'"}.joinToString()
+            val eventsIdsQuery = "(${CalendarContract.Instances.EVENT_ID} IN (${joinedEvents}))"
 
             var eventsSelectionQuery = "$eventsCalendarQuery AND $eventsNotDeletedQuery"
             if (eventIds.isNotEmpty()) {
